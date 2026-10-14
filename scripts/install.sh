@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build TileAll.app, sign it with a stable identity (so the Accessibility grant
-# survives rebuilds), install to ~/Applications and launch it.
+# survives rebuilds), install to /Applications and launch it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -30,8 +30,7 @@ IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning | grep -m1
 codesign --force --options runtime --sign "${IDENTITY:--}" "$APP"
 
 pkill -x TileAll 2>/dev/null || true
-mkdir -p "$HOME/Applications"
-rm -rf "$HOME/Applications/TileAll.app"
-cp -R "$APP" "$HOME/Applications/"
-open "$HOME/Applications/TileAll.app"
-echo "Installed ~/Applications/TileAll.app (signed: ${IDENTITY:-ad-hoc})"
+rm -rf "/Applications/TileAll.app"
+cp -R "$APP" "/Applications/"
+open "/Applications/TileAll.app"
+echo "Installed /Applications/TileAll.app (signed: ${IDENTITY:-ad-hoc})"
