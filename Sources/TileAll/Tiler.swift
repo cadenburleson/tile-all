@@ -10,16 +10,17 @@ struct ManagedWindow {
     let frame: CGRect // AX coordinates: origin at top-left of the primary display
 }
 
-/// Finds every normal, visible window on the current Space and tiles each display's
-/// windows into a grid that fills its usable area.
+/// Finds the normal, visible windows on the current Space (all apps, or just one) and
+/// tiles each display's windows into a grid that fills its usable area.
 final class Tiler {
     var gap: CGFloat = 0
     private var snapshot: [(ManagedWindow, CGRect)] = []
 
     var canRestore: Bool { !snapshot.isEmpty }
 
-    func tileAll() {
-        let windows = visibleWindows()
+    /// Tiles only `pid`'s windows, or every app's when `pid` is nil.
+    func tile(pid: pid_t? = nil) {
+        let windows = visibleWindows(pid: pid)
         guard !windows.isEmpty else { return }
         snapshot = windows.map { ($0, $0.frame) }
 
@@ -54,14 +55,14 @@ final class Tiler {
 
     // MARK: - Window discovery
 
-    func visibleWindows() -> [ManagedWindow] {
+    func visibleWindows(pid only: pid_t? = nil) -> [ManagedWindow] {
         let me = ProcessInfo.processInfo.processIdentifier
         let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
         var onScreen = Set<CGWindowID>()
         var pids: [pid_t] = []
         for entry in info {
             guard (entry[kCGWindowLayer as String] as? Int) == 0,
-                  let pid = entry[kCGWindowOwnerPID as String] as? pid_t, pid != me,
+                  let pid = entry[kCGWindowOwnerPID as String] as? pid_t, pid != me, only == nil || pid == only,
                   let id = entry[kCGWindowNumber as String] as? CGWindowID,
                   (entry[kCGWindowAlpha as String] as? Double ?? 1) > 0
             else { continue }

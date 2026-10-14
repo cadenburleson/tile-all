@@ -41,6 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tiler = Tiler()
     private var statusItem: NSStatusItem!
     private let defaults = UserDefaults.standard
+    /// The app the user was last working in. Clicking our menu bar icon can make
+    /// TileAll itself frontmost, so remember the previous app instead of asking at tile time.
+    private var targetApp = NSWorkspace.shared.frontmostApplication
 
     func applicationDidFinishLaunching(_: Notification) {
         tiler.gap = defaults.bool(forKey: "gaps") ? 8 : 0
@@ -49,9 +52,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: "Tile All")
         rebuildMenu()
 
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+                                                          object: nil, queue: .main) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+            self?.targetApp = app
+        }
+
         let hyper = controlKey | optionKey | cmdKey
         HotKeys.install()
-        HotKeys.register(1, key: kVK_ANSI_G, modifiers: hyper) { [weak self] in self?.tile() }
+        HotKeys.register(1, key: kVK_ANSI_G, modifiers: hyper) { [weak self] in self?.tileApp() }
+        HotKeys.register(3, key: kVK_ANSI_G, modifiers: hyper | shiftKey) { [weak self] in self?.tileEverything() }
         HotKeys.register(2, key: kVK_ANSI_Z, modifiers: hyper) { [weak self] in self?.restore() }
 
         ensureTrusted(prompt: true)
@@ -59,9 +70,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func rebuildMenu() {
         let menu = NSMenu()
-        let tile = NSMenuItem(title: "Tile All Windows", action: #selector(tile), keyEquivalent: "g")
-        tile.keyEquivalentModifierMask = [.control, .option, .command]
-        menu.addItem(tile)
+        let name = targetApp?.localizedName ?? "Current App"
+        let tileApp = NSMenuItem(title: "Tile \(name) Windows", action: #selector(tileApp), keyEquivalent: "g")
+        tileApp.keyEquivalentModifierMask = [.control, .option, .command]
+        menu.addItem(tileApp)
+        let tileAll = NSMenuItem(title: "Tile Windows of All Apps", action: #selector(tileEverything), keyEquivalent: "g")
+        tileAll.keyEquivalentModifierMask = [.control, .option, .command, .shift]
+        menu.addItem(tileAll)
         let restore = NSMenuItem(title: "Restore Previous Layout", action: #selector(restore), keyEquivalent: "z")
         restore.keyEquivalentModifierMask = [.control, .option, .command]
         menu.addItem(restore)
@@ -75,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Tile All", action: #selector(NSApplication.terminate), keyEquivalent: "q"))
         for item in menu.items where item.action != #selector(NSApplication.terminate) { item.target = self }
+        menu.delegate = self
         statusItem.menu = menu
     }
 
@@ -84,9 +100,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    @objc private func tile() {
+    @objc private func tileApp() {
+        guard ensureTrusted(prompt: true), let pid = targetApp?.processIdentifier else { return }
+        tiler.tile(pid: pid)
+    }
+
+    @objc private func tileEverything() {
         guard ensureTrusted(prompt: true) else { return }
-        tiler.tileAll()
+        tiler.tile()
     }
 
     @objc private func restore() {
@@ -116,3 +137,10 @@ let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()
+
+extension AppDelegate: NSMenuDelegate {
+    // Refresh the "Tile <App> Windows" title each time the menu opens.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.items.first?.title = "Tile \(targetApp?.localizedName ?? "Current App") Windows"
+    }
+}
