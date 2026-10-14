@@ -1,5 +1,7 @@
 <p align="center"><img src="docs/demo.gif" alt="Tile All arranging seven Terminal windows into a grid" width="720"></p>
 
+<p align="center"><img src="docs/icon.png" alt="" width="128"></p>
+
 <h1 align="center">Tile All</h1>
 
 <p align="center">
